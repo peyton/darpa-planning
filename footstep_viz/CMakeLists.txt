@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
-set(CMAKE_CXX_COMPILER "ccache")
-
 project(footstep_viz)
 
 find_package(PCL 1.3 REQUIRED)
