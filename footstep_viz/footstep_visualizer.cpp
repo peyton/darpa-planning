@@ -50,6 +50,38 @@ using namespace footsteps;
 /*
  * Footstep
  */
+Footstep::Footstep (pcl::PointNormal point, float rotation, Chirality::Kind chirality)
+{
+  point_ = point;
+  rotation_ = rotation;
+  chirality_ = chirality;
+}
+
+Footstep::Footstep (float x, float y, float z, pcl::Normal normal, float rotation, Chirality::Kind chirality)
+{
+  pcl::PointNormal p;
+  p.x = x; p.y = y; p.z = z;
+  p.normal_x = normal.normal_x; p.normal_y = normal.normal_y; p.normal_z = normal.normal_z;
+  Footstep (p, rotation, chirality);
+}
+
+bool
+Footstep::operator< (const Footstep& other) const
+{
+  pcl::PointNormal p = getPoint();
+  pcl::PointNormal op = other.getPoint();
+  if (p.x == op.x)
+  {
+    if (p.y == op.y)
+    {
+      if (p.z == op.z)
+        return getChirality() < other.getChirality();
+      return p.z < op.z;
+    }
+    return p.y < op.y;
+  }
+  return p.x < op.x;
+}
 
 /*  
  * Footstep Style
@@ -164,14 +196,25 @@ FootstepVisualizer::drawBox (Footstep footstep, const std::string &id, int viewp
   pcl::RGB color = footstep_style_.color[footstep.getChirality()];
 
   pcl::PointNormal pt = footstep.getPoint();
+  Eigen::Vector3f location = Eigen::Vector3f(pt.x, pt.y, pt.z);
 
-  Eigen::Quaternionf rotation = Eigen::Quaternionf(pt.normal_x, pt.normal_y, pt.normal_z, footstep.getRotation());
+  const Eigen::Vector3f default_normal = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+  Eigen::Vector3f normal = Eigen::Vector3f(pt.normal_x, pt.normal_y, pt.normal_z);
 
-  Eigen::Vector3f normals = Eigen::Vector3f(pt.normal_x, pt.normal_y, pt.normal_z);
+  Eigen::Quaternionf rotation_to_normal;
+  rotation_to_normal.setFromTwoVectors(default_normal, normal);
+  Eigen::Quaternionf rotation_about_normal = Eigen::Quaternionf(pt.normal_x, pt.normal_y, pt.normal_z, footstep.getRotation());
 
-  Eigen::Vector3f offset = normals * (1 / sqrt(normals.dot(normals)) * style.r / 2);
+  Eigen::Vector3f offset;
+  
+  if(sqrt(normal.dot(normal)) != 0.0f)
+    offset = normal * (1 / sqrt(normal.dot(normal)) * style.r / 2.0f);
+  else
+    offset = default_normal * style.r / 2.0f;
 
-  addCube(Eigen::Vector3f(pt.x, pt.y, pt.z), rotation, style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
+  //addArrow<pcl::PointXYZ, pcl::PointXYZ>(pcl::PointXYZ(location.x(), location.y(), location.z()), pcl::PointXYZ(location.x() + normal_cross.x(), location.y() + normal_cross.y(), location.z() + normal_cross.z()), 0.0f, 1.0f, 0.0f, id + "hi", viewport);
+
+  addCube(location + offset, rotation_to_normal.normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
 
 }
 
@@ -199,7 +242,7 @@ FootstepVisualizer::addCube (const Eigen::Vector3f &translation, const Eigen::Qu
   vtkSmartPointer<vtkLODActor> actor;
   createActorFromVTKDataSet (data, actor);
   actor->GetProperty ()->SetRepresentationToSurface ();
-  actor->GetProperty ()->SetLighting (false);
+  actor->GetProperty ()->SetLighting (true);
   actor->GetProperty ()->SetColor(r, g, b);
   addActorToRenderer (actor, viewport);
 
@@ -228,5 +271,3 @@ static std::string _rand_string(int size)
 
  return (std::string)sid;
 }
-
-

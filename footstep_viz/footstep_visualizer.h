@@ -40,20 +40,9 @@ namespace footsteps
       /*
        * Constructors/destructors
        */
-      Footstep (pcl::PointNormal point, float rotation=0.0f, Chirality::Kind chirality=Chirality::left)
-      {
-        point_ = point;
-        rotation_ = rotation;
-        chirality_ = chirality;
-      }
+      Footstep (pcl::PointNormal point, float rotation=0.0f, Chirality::Kind chirality=Chirality::left);
 
-      Footstep (float x, float y, float z, pcl::Normal normal, float rotation, Chirality::Kind chirality=Chirality::left)
-      {
-        pcl::PointNormal p;
-        p.x = x; p.y = y; p.z = z;
-        p.normal_x = normal.normal_x; p.normal_y = normal.normal_y; p.normal_z = normal.normal_z;
-        Footstep (p, rotation, chirality);
-      }
+      Footstep (float x, float y, float z, pcl::Normal normal, float rotation, Chirality::Kind chirality=Chirality::left);
 
       virtual ~Footstep(){}
 
@@ -73,22 +62,7 @@ namespace footsteps
        * Comparators
        */
       bool
-        operator< (const Footstep& other) const
-        {
-          pcl::PointNormal p = getPoint();
-          pcl::PointNormal op = other.getPoint();
-          if (p.x == op.x)
-          {
-            if (p.y == op.y)
-            {
-              if (p.z == op.z)
-                return getChirality() < other.getChirality();
-              return p.z < op.z;
-            }
-            return p.y < op.y;
-          }
-          return p.x < op.x;
-        }
+        operator< (const Footstep& other) const;
   };
   typedef std::vector<Footstep> FootstepVector;
 

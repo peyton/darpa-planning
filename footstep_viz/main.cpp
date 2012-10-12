@@ -20,18 +20,13 @@
   void
 printUsage (const char* progName)
 {
-  std::cout << "\n\nUsage: "<<progName<<" [options]\n\n"
+  std::cout << "\n\nUsage: "<<progName<<" [options] [input_file]\n\n"
     << "Options:\n"
     << "-------------------------------------------\n"
     << "-h           this help\n"
-    << "-s           Simple visualisation example\n"
-    << "-r           RGB colour visualisation example\n"
-    << "-c           Custom colour visualisation example\n"
-    << "-n           Normals visualisation example\n"
-    << "-a           Shapes visualisation example\n"
-    << "-v           Viewports example\n"
-    << "-i           Interaction Customization example\n"
-    << "-f           Custom file input\n"
+    << "-d           Downsample voxels\n"
+    << "-f           Filter outliers\n"
+    << "-n           Compute normals\n"
     << "\n\n";
 }
 
@@ -184,22 +179,39 @@ main (int argc, char** argv)
    * Visualization
    */
 
-  // Create viewer
+  // Create FootstepVisualizer, a subclass of PCLVisualizer
   boost::shared_ptr<footsteps::FootstepVisualizer> viewer;
   viewer = footstepVis(cloud_color_ptr, cloud_normals_ptr);
 
   // Generate random footsteps
   footsteps::FootstepVector steps;
   
+  // Generate 10 random footsteps
   for (int i = 0; i < 10; i++)
   {
-    pcl::PointXYZRGB target_pt = (*cloud_color_ptr)[rand() % cloud_color_ptr->size()];
+    // Pull a random target point
+    int index = rand() % cloud_color_ptr->size();
+    pcl::PointXYZRGB target_pt = (*cloud_color_ptr)[index];
+    pcl::Normal target_normal = (*cloud_normals_ptr)[index];
+
+    // Create new point to be the center of our footstep
     pcl::PointNormal pt;
-    pt.x = target_pt.x; pt.y = target_pt.y; pt.z = target_pt.z;
-    footsteps::Footstep footstep (pt, 0.0f, (footsteps::Chirality::Kind)(rand() % 2));
+    memcpy(pt.data, target_pt.data, 3 * sizeof(float)); // Copy XYZ
+    memcpy(pt.data_n, target_normal.data_n, 3 * sizeof(float)); // Copy normals
+
+    // Chirality::left is a left footstep. Chirality::right is a right footstep
+    // Chirality::Kind is an enum with 2 values: left and right, so for random chirality we
+    // use rand() % 2
+    footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)(rand() % 2);
+
+    // Rotation (in radians) about the normal vector
+    float rotation = 0.0f;
+
+    footsteps::Footstep footstep (pt, rotation, chirality);
     steps.push_back (footstep);
   }
   
+  // Add footsteps to our FootstepVisualizer
   viewer->addFootsteps(steps);
 
   //--------------------
@@ -207,6 +219,7 @@ main (int argc, char** argv)
   //--------------------
   while (!viewer->wasStopped ())
   {
+    // Not sure what these do
     viewer->spinOnce (1000);
     boost::this_thread::sleep (boost::posix_time::microseconds (100000));
   }
