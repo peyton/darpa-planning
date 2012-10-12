@@ -51,7 +51,7 @@ boost::shared_ptr<footsteps::FootstepVisualizer> footstepVis (pcl::PointCloud<pc
 
   if (normals)
   {
-    viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
+//    viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
   }
 
   return (viewer);
@@ -196,7 +196,7 @@ main (int argc, char** argv)
     pcl::PointXYZRGB target_pt = (*cloud_color_ptr)[rand() % cloud_color_ptr->size()];
     pcl::PointNormal pt;
     pt.x = target_pt.x; pt.y = target_pt.y; pt.z = target_pt.z;
-    footsteps::Footstep footstep (pt, (footsteps::Chirality::Kind)(rand() % 2));
+    footsteps::Footstep footstep (pt, 0.0f, (footsteps::Chirality::Kind)(rand() % 2));
     steps.push_back (footstep);
   }
   
