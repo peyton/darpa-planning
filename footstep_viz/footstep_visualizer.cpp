@@ -52,6 +52,7 @@ using namespace footsteps;
  */
 Footstep::Footstep (pcl::PointNormal point, float rotation, Chirality::Kind chirality)
 {
+  // Initialize members
   point_ = point;
   rotation_ = rotation;
   chirality_ = chirality;
@@ -59,15 +60,18 @@ Footstep::Footstep (pcl::PointNormal point, float rotation, Chirality::Kind chir
 
 Footstep::Footstep (float x, float y, float z, pcl::Normal normal, float rotation, Chirality::Kind chirality)
 {
+  // Create a footstep point out of the passed-in xyz-normal
   pcl::PointNormal p;
   p.x = x; p.y = y; p.z = z;
   p.normal_x = normal.normal_x; p.normal_y = normal.normal_y; p.normal_z = normal.normal_z;
+
   Footstep (p, rotation, chirality);
 }
 
 bool
 Footstep::operator< (const Footstep& other) const
 {
+  // Order footsteps by x, then y, then z, then chirality
   pcl::PointNormal p = getPoint();
   pcl::PointNormal op = other.getPoint();
   if (p.x == op.x)
@@ -112,6 +116,8 @@ DefaultFootstepStyle::DefaultFootstepStyle()
 bool
 FootstepVisualizer::addFootsteps (const FootstepVector &footsteps, const std::string &id, int viewport, FootstepStyle style)
 {
+  std::cout << "adding id " << id << std::endl;
+
   // add footsteps one-by-one
   for (FootstepVector::const_iterator it = footsteps.begin(); it != footsteps.end(); it++)
     if (!addFootstep (*it, id, viewport, style))
@@ -133,8 +139,14 @@ FootstepVisualizer::addFootstep (Footstep footstep, const std::string &id, int v
     id_map[id] = FootstepVector ();
   FootstepVector footsteps = id_map[id];
 
+  std::cout << "footsteps size " << footsteps.size() << std::endl;
+
   // add footstep to footsteps
   footsteps.push_back(footstep);
+
+  // Update footsteps in id_map and id_map in footstep_viewport_map_
+  id_map[id] = footsteps;
+  footstep_viewport_map_[viewport] = id_map;
 
   // generate and store random shape id
   std::string sid = _rand_string(16);
@@ -148,8 +160,10 @@ FootstepVisualizer::addFootstep (Footstep footstep, const std::string &id, int v
     return false;
   }
 
+  // Choose draw function based on style
   FootstepDrawFunction drawFunction = footstep_draw_functions_[style.shape];
-  // ugly cast to get around cyclic dependency
+
+  // Draw shape
   (this->*(drawFunction))(footstep, sid, viewport, style);
 
   return true;
@@ -158,6 +172,7 @@ FootstepVisualizer::addFootstep (Footstep footstep, const std::string &id, int v
 bool
 FootstepVisualizer::removeFootsteps (const std::string &id, int viewport)
 {
+  std::cout << "removing id " << id << std::endl;
   // check whether viewport exists
   if (!footstep_viewport_map_.count(viewport))
     return false;
@@ -170,6 +185,8 @@ FootstepVisualizer::removeFootsteps (const std::string &id, int viewport)
 
   // get footsteps
   FootstepVector footsteps = id_map[id];
+
+  std::cout << "removing " << footsteps.size() << " footsteps" << std::endl;
 
   // remove footsteps in visualizer
   for (FootstepVector::const_iterator it = footsteps.begin(); it != footsteps.end(); it++)
@@ -193,28 +210,38 @@ FootstepVisualizer::removeFootsteps (const std::string &id, int viewport)
 void
 FootstepVisualizer::drawBox (Footstep footstep, const std::string &id, int viewport, const FootstepStyle style)
 {
+  // Grab box color from style
   pcl::RGB color = footstep_style_.color[footstep.getChirality()];
 
+  // Get footstep target point and turn into vector
   pcl::PointNormal pt = footstep.getPoint();
   Eigen::Vector3f location = Eigen::Vector3f(pt.x, pt.y, pt.z);
 
+  // Set up default normal ([0, 1, 0], the default orientation of cubes in the visualizer),
+  // and footstep normal
   const Eigen::Vector3f default_normal = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
   Eigen::Vector3f normal = Eigen::Vector3f(pt.normal_x, pt.normal_y, pt.normal_z);
 
+  // Produce a rotation from the default normal to the footstep's normal
   Eigen::Quaternionf rotation_to_normal;
   rotation_to_normal.setFromTwoVectors(default_normal, normal);
 
+  // Produce a rotation about the footstep's normal's axis
   Eigen::AngleAxisf axis_angle = Eigen::AngleAxisf(footstep.getRotation(), normal);
   Eigen::Quaternionf rotation_about_normal = Eigen::Quaternionf(axis_angle);
 
+  // The above operations rotated around `pt` at the center
+  // We offset the cube so that it rests on top of the point.
+  // To do this, we move the cube style.r/2 in the direction
+  // of its normal vector
   Eigen::Vector3f offset;
-
   if(sqrt(normal.dot(normal)) != 0.0f)
     offset = normal * (1 / sqrt(normal.dot(normal)) * style.r / 2.0f);
   else
     offset = default_normal * style.r / 2.0f;
 
 
+  // Add cube to the visualizer
   addCube(location + offset, (rotation_about_normal * rotation_to_normal).normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
 
 }
@@ -222,13 +249,21 @@ FootstepVisualizer::drawBox (Footstep footstep, const std::string &id, int viewp
 void
 FootstepVisualizer::drawSphere (Footstep footstep, const std::string &id, int viewport, const FootstepStyle style)
 {
+  // Grab sphere color from footstep style
   pcl::RGB color = footstep_style_.color[footstep.getChirality()];
+
+  // Add sphere to visualizer
   addSphere<pcl::PointNormal> (footstep.getPoint(), footstep_style_.r, color.r, color.g, color.b, id, viewport);
 }
 
 bool
 FootstepVisualizer::addCube (const Eigen::Vector3f &translation, const Eigen::Quaternionf &rotation, double width, double height, double depth, float r, float g, float b, const std::string &id, int viewport)
 {
+  /*
+   * Note: this function copied from pcl_visualizer.cpp
+   * with modifications to allow colors
+   */
+
   // Check to see if this ID entry already exists (has it been already added to the visualizer?)
   pcl::visualization::ShapeActorMap::iterator am_it = shape_actor_map_->find (id);
   if (am_it != shape_actor_map_->end ())

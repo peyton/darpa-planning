@@ -13,16 +13,33 @@
 #include "footstep_visualizer.h"
 
 extern "C" {
-    #include "demo.h";
+    #include "demo.h"
 }
 
 
-boost::shared_ptr<footsteps::FootstepVisualizer> viewer;
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_src (new pcl::PointCloud<pcl::PointXYZRGBA>);
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_tr2 (new pcl::PointCloud<pcl::PointXYZRGBA>);
 Eigen::Matrix4f Ti2 = Eigen::Matrix4f::Identity (), targetToSource2;
-boost::mutex mtx_; 
+boost::mutex mtx_;
 
+
+/*
+ * Visualization globals
+ */
+
+// Flag set by worker to tell visualizer to refresh data
+volatile bool viewerNeedsRefresh_;
+// Point cloud to show after refresh
+pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_refresh_ptr_ (new pcl::PointCloud<pcl::PointXYZRGBA>);
+;
+// Footsteps to show after refresh
+footsteps::FootstepVector footsteps_;
+// Mutex to protect access to refresh globals
+boost::mutex refreshMtx_;
+
+/*
+ * Astar globals
+ */
 float terrain_value[TERRAIN_N_X][TERRAIN_N_Y];
 float cost_map[TERRAIN_N_X][TERRAIN_N_Y];
 int terrain_index[TERRAIN_N_X][TERRAIN_N_Y];
@@ -30,24 +47,8 @@ int terrain_count[TERRAIN_N_X][TERRAIN_N_Y];
 
 
 /*
- * Show point cloud
+ * Downsample point cloud
  */
-
-void
- showCloud (pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud)
-{
-  // --------------------------------------------
-  // -----Remove old point cloud and add point cloud-----
-  // --------------------------------------------
-const std::string pc_id = "cloud";
-if (!viewer->updatePointCloud(cloud, pc_id))
-	{
-  pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGBA> rgb(cloud);
-  viewer->addPointCloud<pcl::PointXYZRGBA> (cloud, rgb, pc_id);
-  viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, pc_id);
-	}
-}
-
 void
 downsample (pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &points, float leaf_size,
         pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &downsampled_out)
@@ -61,7 +62,7 @@ downsample (pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &points, float leaf_size,
 float terrain_cost( int ix, int iy, float terrain_value[TERRAIN_N_X][TERRAIN_N_Y])
 {
 
-  int i, j;	
+  int i, j;
   float sum, max, rough;
   float value[15];
 
@@ -94,10 +95,10 @@ float terrain_cost( int ix, int iy, float terrain_value[TERRAIN_N_X][TERRAIN_N_Y
 	  return 1;
   else
 	  return (float) ((max+2*rough+sum/15));
-	  
+
 }
 
-void Get_Transformation_Matrix() 
+void Get_Transformation_Matrix()
 {
 	int i, j, f1, f2;
 	int data2[12][2];
@@ -153,7 +154,7 @@ void Get_Transformation_Matrix()
 			cloud_temp2->points[3*k1+k2].z = (60.375*2.54 + 9.25*2.54*(2-k2))/100;
 		  }
 	  }
-	   
+
 	  correspondences.resize(cloud_temp1->size ());
 	  for (int j = 0; j < cloud_temp2->points.size (); ++j)
 	  {
@@ -171,7 +172,7 @@ void Get_Transformation_Matrix()
 	  pcl::transformPointCloud (*cloud_sc2, *cloud_tr2, targetToSource2);
 }
 
-void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud){ 
+void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud){
 
 	//const Eigen::Vector3f translate (0, 0.0, 0.0);
 	//const Eigen::Quaternionf no_rotation (0, 0, 0, 0);
@@ -180,19 +181,53 @@ void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud){
 	pcl::transformPointCloud (*cloud, *cloud_src, targetToSource2);
 	//boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> > pointer(cloud_src);
     //viewer.showCloud(pointer);
-} 
+}
 
 void visualizerFunc()
 {
+  boost::shared_ptr<footsteps::FootstepVisualizer> viewer;
+	// Create visualizer
+
+  viewer = boost::shared_ptr<footsteps::FootstepVisualizer>(new footsteps::FootstepVisualizer ("Viewer"));
+
+  viewer->addCoordinateSystem (1.0);
+  viewer->initCameraParameters();
+
 	while(!viewer->wasStopped())
 	{
-		viewer->spinOnce(100);
-		boost::this_thread::sleep (boost::posix_time::microseconds( 100000));
+    // Refresh data if necessary
+    if (viewerNeedsRefresh_)
+    {
+      viewerNeedsRefresh_ = false;
+      boost::mutex::scoped_lock lock (refreshMtx_);
+      // --------------------------------------------
+      // -----Remove old point cloud and add point cloud-----
+      // --------------------------------------------
+      const std::string pc_id = "cloud";
+      if (!viewer->updatePointCloud(cloud_refresh_ptr_, pc_id))
+      {
+        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGBA> rgb(cloud_refresh_ptr_);
+        viewer->addPointCloud<pcl::PointXYZRGBA> (cloud_refresh_ptr_, rgb, pc_id);
+        viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, pc_id);
+      }
+
+      // -------------------------------------------------------
+      // ------Remove old footsteps and add new footsteps-------
+      // -------------------------------------------------------
+      const std::string fs_id = "footsteps";
+      viewer->removeFootsteps(fs_id);
+      viewer->addFootsteps(footsteps_, fs_id);
+
+      lock.unlock();
+    }
+
+    viewer->spinOnce(100);
+    boost::this_thread::sleep (boost::posix_time::microseconds( 100000));
 	}
 }
 
-void workerFunc() 
-{	
+void workerFunc()
+{
 	int i, j, loc_i, loc_j, count, input1;
 	int ix, iy, LL;
 	float kx, ky, sum;
@@ -200,7 +235,7 @@ void workerFunc()
 	FILE * pFile;
 	boost::posix_time::seconds workTime(3);
 	// Downsample the cloud
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr downsampled (new pcl::PointCloud<pcl::PointXYZRGBA>);  
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr downsampled (new pcl::PointCloud<pcl::PointXYZRGBA>);
     const float voxel_grid_leaf_size = 0.01;
     boost::this_thread::sleep(workTime);
 
@@ -284,7 +319,7 @@ void workerFunc()
 
     // Use all neighbors in a sphere of radius 3cm
     ne.setRadiusSearch (0.03);
-    
+
     // Compute the features
     ne.compute (*cloud_normals_ptr);
 
@@ -295,7 +330,7 @@ void workerFunc()
 	* Astar
 	*/
 
-	// Find the path based on Astar	
+	// Find the path based on Astar
 	generate_true_cost_map( t1, cost_map);
 	a1 = create_astar( t1 );
 
@@ -311,16 +346,16 @@ void workerFunc()
 				// footstep parameters
 				int index = terrain_index[ix][iy];
 				pcl::PointXYZRGBA target_pt = downsampled->points[index];
-				
+
 				pcl::Normal target_normal = (*cloud_normals_ptr)[index];
 				float rotation = p1->state[ANGLE];
 				footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
-				
+
 				// create new point to be footstep target
 				pcl::PointNormal pt_nrm;
 				memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
 				memcpy(pt_nrm.data_n, target_normal.data_n, 3 * sizeof(float));
-			
+
 				footsteps::Footstep footstep (pt_nrm, rotation, chirality);
 				steps.push_back(footstep);
 	  }
@@ -328,36 +363,27 @@ void workerFunc()
     }
 	p1 = NULL;
 	boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> > pointer(downsampled);
-	
-	std::cout << "SIZE:::::::::::::::::" << steps.size() << std::endl;
-	for (footsteps::FootstepVector::iterator it = steps.begin(); it != steps.end(); ++it)
-	{
-		std::cout << "STEP POINT" << it->getPoint() << std::endl;
-	}
 
-	// remove old footsteps and add new footsteps
-	const std::string fid = "footsteps";
-	//viewer->removeFootsteps(fid);
-	viewer->addFootsteps(steps, fid);
-	std::cout << "Showing cloud" << std::endl;
-    showCloud(pointer);
-	std::cout << "Showed cloud" << std::endl;
 
-     //std::stringstream s; 
-     //s << "test.pcd"; 
-	 //pcl::io::savePCDFileASCII(s.str(), *downsampled); 
+  // Update refresh global variables
+  {
+    boost::mutex::scoped_lock lock(refreshMtx_);
+    pcl::copyPointCloud(*pointer, *cloud_refresh_ptr_);
+    footsteps_ = steps;
+    viewerNeedsRefresh_ = true;
+    lock.unlock();
+  }
+
+     //std::stringstream s;
+     //s << "test.pcd";
+	 //pcl::io::savePCDFileASCII(s.str(), *downsampled);
 	}
 }
 
 int
 main (int argc, char** argv)
 {
-	// Create visualizer
-
-  viewer = boost::shared_ptr<footsteps::FootstepVisualizer>(new footsteps::FootstepVisualizer ("Viewer"));
-
-  viewer->addCoordinateSystem (1.0);
-  viewer->initCameraParameters();
+  std::cout << "Began!" << std::endl;
 	int i, j, input1;
 
 	// =============== Creat an empty Terrain size 25mx25m=================//
@@ -374,17 +400,18 @@ main (int argc, char** argv)
     t1->max[XX] = 25.0;
     t1->max[YY] = 25.0;
 
+    std::cout << "Getting transformation matrix" << std::endl;
 	Get_Transformation_Matrix();
 
 	//std::cout << "Select data number: ";
 	//std::cin >> input1;
 
 	//=================== Get data from Camera ================================//
-	pcl::Grabber* interface = new pcl::OpenNIGrabber(); 
-    boost::function<void (const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr&)> 
-          f = boost::bind(&cloud_cb_, _1); 
+	pcl::Grabber* interface = new pcl::OpenNIGrabber();
+    boost::function<void (const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr&)>
+          f = boost::bind(&cloud_cb_, _1);
 	boost::signals2::connection c = interface->registerCallback (f);
-	interface->start(); 
+	interface->start();
 
 	//std::cout << "Select data number: ";
 	//std::cin >> input1;
@@ -392,16 +419,15 @@ main (int argc, char** argv)
 	// Threading
 	boost::thread workerThread(workerFunc);
 	boost::thread visualizerThread(visualizerFunc);
-	std::cout << "Start Main Thread " << std::endl;
 //	workerThread.join();
 	boost::thread_group group;
 	group.add_thread(&workerThread);
 	group.add_thread(&visualizerThread);
- 
+
 	group.join_all();
-	
+
   std::cout << "Select data number: ";
   std::cin >> input1;
-  interface->stop(); 
+  interface->stop();
   return (0);
 }
