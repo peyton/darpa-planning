@@ -116,8 +116,6 @@ DefaultFootstepStyle::DefaultFootstepStyle()
 bool
 FootstepVisualizer::addFootsteps (const FootstepVector &footsteps, const std::string &id, int viewport, FootstepStyle style)
 {
-  std::cout << "adding id " << id << std::endl;
-
   // add footsteps one-by-one
   for (FootstepVector::const_iterator it = footsteps.begin(); it != footsteps.end(); it++)
     if (!addFootstep (*it, id, viewport, style))
@@ -138,8 +136,6 @@ FootstepVisualizer::addFootstep (Footstep footstep, const std::string &id, int v
   if (!id_map.count(id))
     id_map[id] = FootstepVector ();
   FootstepVector footsteps = id_map[id];
-
-  std::cout << "footsteps size " << footsteps.size() << std::endl;
 
   // add footstep to footsteps
   footsteps.push_back(footstep);
@@ -172,7 +168,6 @@ FootstepVisualizer::addFootstep (Footstep footstep, const std::string &id, int v
 bool
 FootstepVisualizer::removeFootsteps (const std::string &id, int viewport)
 {
-  std::cout << "removing id " << id << std::endl;
   // check whether viewport exists
   if (!footstep_viewport_map_.count(viewport))
     return false;
@@ -185,8 +180,6 @@ FootstepVisualizer::removeFootsteps (const std::string &id, int viewport)
 
   // get footsteps
   FootstepVector footsteps = id_map[id];
-
-  std::cout << "removing " << footsteps.size() << " footsteps" << std::endl;
 
   // remove footsteps in visualizer
   for (FootstepVector::const_iterator it = footsteps.begin(); it != footsteps.end(); it++)
