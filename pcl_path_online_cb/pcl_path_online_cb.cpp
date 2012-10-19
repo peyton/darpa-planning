@@ -31,7 +31,7 @@ boost::mutex mtx_;
 volatile bool viewerNeedsRefresh_;
 // Point cloud to show after refresh
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_refresh_ptr_ (new pcl::PointCloud<pcl::PointXYZRGBA>);
-;
+pcl::PointCloud<pcl::Normal>::Ptr normal_refresh_ptr_ (new pcl::PointCloud<pcl::Normal>);
 // Footsteps to show after refresh
 footsteps::FootstepVector footsteps_;
 // Mutex to protect access to refresh globals
@@ -239,9 +239,9 @@ void workerFunc()
     const float voxel_grid_leaf_size = 0.01;
     boost::this_thread::sleep(workTime);
 
-	while(1){
+	//while(1){
 	boost::mutex::scoped_lock lock (mtx_);
-	downsample (cloud_src, voxel_grid_leaf_size, downsampled);
+	downsample (cloud_tr2, voxel_grid_leaf_size, downsampled);
 	lock.unlock();
 	LL = downsampled->height*downsampled->width;
 	for (i=0;i<LL;i++)
@@ -303,6 +303,34 @@ void workerFunc()
     std::cin >> input1;
 */
 
+	/*
+	* Astar
+	*/
+
+	// Find the path based on Astar
+	generate_true_cost_map( t1, cost_map);
+	a1 = create_astar( t1 );
+
+	plan();
+	printf_final_path( p1 );
+
+
+    // get indices of target pcl points
+    std::vector<int> footstep_indices;
+	for ( ; ; )
+    {
+      if ( p1 == NULL )
+		break;
+			terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
+			if (terrain_index[ix][iy]!=NULL){
+				// footstep parameters
+				footstep_indices.push_back(terrain_index[ix][iy]);
+	  }
+      p1 = p1->previous;
+    }
+	p1 = NULL;
+
+
 
 /*
  * Compute normals
@@ -317,8 +345,13 @@ void workerFunc()
     pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGBA> ());
     ne.setSearchMethod (tree);
 
-    // Use all neighbors in a sphere of radius 3cm
-    ne.setRadiusSearch (0.03);
+    // Use all neighbors in a sphere of radius 10cm
+    ne.setRadiusSearch (0.10);
+
+    // Restrict indices to those we want to step to
+
+    boost::shared_ptr<vector<int> > indices_ptr (new vector<int> (footstep_indices));
+    //ne.setIndices(indices_ptr);
 
     // Compute the features
     ne.compute (*cloud_normals_ptr);
@@ -326,42 +359,27 @@ void workerFunc()
 	// Generate footsteps
 	footsteps::FootstepVector steps;
 
-	/*
-	* Astar
-	*/
+  std::cout << footstep_indices.size() << std::endl;
+  for (std::vector<int>::iterator it = footstep_indices.begin(); it != footstep_indices.end(); it++)
+  {
+				pcl::PointXYZRGBA target_pt = downsampled->points[*it];
 
-	// Find the path based on Astar
-	generate_true_cost_map( t1, cost_map);
-	a1 = create_astar( t1 );
+				pcl::Normal target_normal = (*cloud_normals_ptr)[*it];
 
-	plan();
-	printf_final_path( p1 );
-
-	for ( ; ; )
-    {
-      if ( p1 == NULL )
-		break;
-			terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
-			if (terrain_index[ix][iy]!=NULL){
-				// footstep parameters
-				int index = terrain_index[ix][iy];
-				pcl::PointXYZRGBA target_pt = downsampled->points[index];
-
-				pcl::Normal target_normal = (*cloud_normals_ptr)[index];
-				float rotation = p1->state[ANGLE];
-				footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
+				//float rotation = p1->state[ANGLE];
+        float rotation = 0;
+				footsteps::Chirality::Kind chirality = footsteps::Chirality::left;//(footsteps::Chirality::Kind)p1->state[SIDE];
 
 				// create new point to be footstep target
 				pcl::PointNormal pt_nrm;
 				memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
-				memcpy(pt_nrm.data_n, target_normal.data_n, 3 * sizeof(float));
+				//memcpy(pt_nrm.data_n, target_normal.data_n, 3 * sizeof(float));
 
+        float normals[3] = {0.f, 1.f, 0.f};
+				memcpy(pt_nrm.data_n, normals, 3 * sizeof(float));
 				footsteps::Footstep footstep (pt_nrm, rotation, chirality);
 				steps.push_back(footstep);
-	  }
-      p1 = p1->previous;
     }
-	p1 = NULL;
 	boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> > pointer(downsampled);
 
 
@@ -377,13 +395,12 @@ void workerFunc()
      //std::stringstream s;
      //s << "test.pcd";
 	 //pcl::io::savePCDFileASCII(s.str(), *downsampled);
-	}
+	//}
 }
 
 int
 main (int argc, char** argv)
 {
-  std::cout << "Began!" << std::endl;
 	int i, j, input1;
 
 	// =============== Creat an empty Terrain size 25mx25m=================//
@@ -400,7 +417,6 @@ main (int argc, char** argv)
     t1->max[XX] = 25.0;
     t1->max[YY] = 25.0;
 
-    std::cout << "Getting transformation matrix" << std::endl;
 	Get_Transformation_Matrix();
 
 	//std::cout << "Select data number: ";
@@ -419,7 +435,7 @@ main (int argc, char** argv)
 	// Threading
 	boost::thread workerThread(workerFunc);
 	boost::thread visualizerThread(visualizerFunc);
-//	workerThread.join();
+
 	boost::thread_group group;
 	group.add_thread(&workerThread);
 	group.add_thread(&visualizerThread);

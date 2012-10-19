@@ -235,7 +235,9 @@ FootstepVisualizer::drawBox (Footstep footstep, const std::string &id, int viewp
 
 
   // Add cube to the visualizer
-  addCube(location + offset, (rotation_about_normal * rotation_to_normal).normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
+  Eigen::Quaternionf zero_rotation;
+  addCube(location + offset, zero_rotation, style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
+  //addCube(location + offset, (rotation_about_normal * rotation_to_normal).normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
 
 }
 

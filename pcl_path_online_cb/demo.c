@@ -199,7 +199,7 @@ void generate_true_cost_map( TERRAIN *tt, float terrain_value[TERRAIN_N_X][TERRA
   tt->inc = (tt->max[XX] - tt->min[XX])/TERRAIN_N_X;
   if ( fabsf( tt->inc - (tt->max[YY] - tt->min[YY])/TERRAIN_N_Y ) > 1e-3 )
     {
-      // Need to implement more sophisticated tt->inc 
+      // Need to implement more sophisticated tt->inc
       fprintf( stderr, "X and Y distance/pixel not equal: %g %g\n",
 	       tt->inc, (tt->max[YY] - tt->min[YY])/TERRAIN_N_Y );
       exit( -1 );
@@ -214,23 +214,23 @@ void generate_true_cost_map( TERRAIN *tt, float terrain_value[TERRAIN_N_X][TERRA
   tt->current[XX] = 15;
   tt->current[YY] = 10;
   tt->current[ANGLE] = (float) (M_PI/2);
-  tt->current[SIDE] = LEFT;
+  tt->current[SIDE] = RIGHT;
 
   tt->goal[XX] = 15;
   tt->goal[YY] = 15;
   tt->goal[ANGLE] = tt->current[ANGLE];
   // should ignore this in calculating distance to goal
-  tt->current[SIDE] = LEFT; 
+  tt->current[SIDE] = LEFT;
 
   // initialize cost map
   for ( i = 0; i < tt->resolution[XX]; i++ )
     for ( j = 0; j < tt->resolution[YY]; j++ )
       set_true_cost_map_pixel( tt, i, j, terrain_value[i][j] );
-         	
+
   // BLUR COST MAP
   // blur each column
   for ( ix = 0; ix < tt->resolution[XX]; ix++ )
-    { 
+    {
       for ( iy = 0; iy < tt->resolution[YY]; iy++ )
 		{
 			value[ix][iy] = 0;
@@ -238,13 +238,13 @@ void generate_true_cost_map( TERRAIN *tt, float terrain_value[TERRAIN_N_X][TERRA
                 for (kx = -2; kx <= 2; kx++)
                     value[ix][iy] += get_true_cost_map_pixel(tt,ix + kx, iy + ky);
 			value[ix][iy] = value[ix][iy]/25;
-			
+
 		}
     }
   for ( ix = 0; ix < tt->resolution[XX]; ix++ )
 	  for ( iy = 0; iy < tt->resolution[YY]; iy++ )
 		set_true_cost_map_pixel( tt, ix, iy, value[ix][iy]);
-	
+
 }
 
 /******* A* SEARCH ****************************************************/
@@ -401,7 +401,7 @@ void free_astar_node( ASTAR *aa, ASTAR_NODE *an )
 void free_all_astar_nodes( ASTAR *aa, ASTAR_NODE *an )
 {
   ASTAR_NODE *an_next;
-  
+
   if ( an == NULL )
     return;
 
@@ -523,7 +523,7 @@ float astar_step_cost( ASTAR *aa, ASTAR_NODE *an_child, ASTAR_NODE *an )
   if (an == NULL)
   {
       fprintf( stderr, "Parent cannot be NULL \n" );
-      exit( -1 );	
+      exit( -1 );
   }
   else
   {
@@ -561,7 +561,7 @@ float astar_step_cost( ASTAR *aa, ASTAR_NODE *an_child, ASTAR_NODE *an )
 
   if (p_s_l<0.1)
     l = sqrtf(x*x+y*y);
-  else 
+  else
     l = sqrtf(x*x+y*y)/2*sqrtf(d_s_l/p_s_l);
 
   if (an->state[SIDE]==LEFT)
@@ -576,12 +576,12 @@ float astar_step_cost( ASTAR *aa, ASTAR_NODE *an_child, ASTAR_NODE *an )
     E_s_a = powf((n_s_w-s_w)/n_s_w,0.2)*D*(n_s_w-s_w);
   else if (s_w<n_s_w)
     E_s_a = D*(n_s_w-s_w);
-  
+
   E_s = 8*(C*s_w*s_w + E_s_a);
   E_r = 0.2*ori_shift*ori_shift/l;
 
   return ((E_m + E_s + E_r)/4);
-	
+
 }
 
 
@@ -625,7 +625,7 @@ float astar_terrain_cost( ASTAR *aa, ASTAR_NODE *an )
 			return BIG_COST;
 		  if ( py > aa->tt->max[YY] )
 			return BIG_COST;
-		  terrain_indices( aa->tt, px, py, NULL, NULL, &index); 
+		  terrain_indices( aa->tt, px, py, NULL, NULL, &index);
 		  value[5*ix+iy] = aa->tt->perceived_cost_map[index];
 		  sum += value[5*ix+iy];
 	  }
@@ -756,7 +756,7 @@ void init_astar( ASTAR *aa )
   // currently all of these are the same, but eventually they may be different
   an->terrain_index = index;
   an->location_index = index;
-  
+
   an->cost_from_start = 0.0;
   an->one_step_cost = 0.0;
   an->terrain_cost = tt->perceived_cost_map[ an->terrain_index ];
@@ -837,7 +837,7 @@ ASTAR_NODE *handle_duplicates( ASTAR *aa, ASTAR_NODE *an )
 	      // ideally should reorder priority q, but too expensive
 
 	      /*
-	      if ( an2->cost_from_start - an->cost_from_start > 0.1 
+	      if ( an2->cost_from_start - an->cost_from_start > 0.1
 		   && DO_PRINTF )
 		printf(
 		       "%g %g XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n",
@@ -1409,10 +1409,10 @@ ASTAR_NODE *generate_child( ASTAR *aa, ASTAR_NODE *an, int *i_child )
       // allow different numbers of actions at different steps
       if ( an->depth == 0 )
 	an_child = generate_8_children( aa, an, i_child );
-      else 
+      else
 	an_child = generate_4_children( aa, an, i_child );
     }
-  else 
+  else
     {
       // allow different numbers of actions at different steps
       if ( an->depth == 0 )
@@ -1540,7 +1540,7 @@ void enqueue( ASTAR *aa, ASTAR_NODE *an )
     }
 
   prev = &(aa->priority_q);
-  q = aa->priority_q; 
+  q = aa->priority_q;
 
   for ( j = 0; ; j++ )
     {
@@ -1550,7 +1550,7 @@ void enqueue( ASTAR *aa, ASTAR_NODE *an )
 	  *prev = an;
 	  return;
 	}
-	  
+
       if ( q->priority >= an->priority )
 	{
 	  an->next = q;
@@ -1772,7 +1772,7 @@ void expand_next_node( ASTAR *aa, ASTAR_NODE *an )
 			printf( "enn: %d %g\n", aa->expand_next_node_count,
 		    child->priority );
 		else if ( aa->at_goal->priority > child->priority )
-			printf( "enn: %d %g %g\n", aa->expand_next_node_count,		
+			printf( "enn: %d %g %g\n", aa->expand_next_node_count,
 			aa->at_goal->priority, child->priority );
 
 		// manage best so far
@@ -1822,7 +1822,7 @@ void expand_next_node( ASTAR *aa, ASTAR_NODE *an )
 					break;
 					}
 				an2 = an2->next;
-		  
+
 				if ( j > 1000000 )
 					{
 					fprintf( stderr, "enn: loop broken.\n" );
@@ -1900,7 +1900,7 @@ void add_an_to_path( ASTAR *aa, ASTAR_NODE *an )
   PATH_NODE *pn;
 
   pn = create_path_node( an );
-      
+
   pn->previous = p1;
   if ( p1 != NULL )
     {
@@ -1908,7 +1908,7 @@ void add_an_to_path( ASTAR *aa, ASTAR_NODE *an )
       pn->cost_from_start += p1->cost_from_start;
     }
   p1 = pn;
-  
+
 
   if ( DO_PRINTF )
     printf( "path: %g %g %g %g; %g %g %g %g %g %g\n",
@@ -1990,7 +1990,7 @@ void plan()
     {
       if ( a1->done ){
 		printf( "End 1\n");
-		break;	
+		break;
 	  }
 
       if ( a1->priority_q == NULL )
@@ -2152,7 +2152,7 @@ void generate_true_cost_map_old( TERRAIN *tt, unsigned int seed )
   tt->inc = (tt->max[XX] - tt->min[XX])/TERRAIN_N_X;
   if ( fabsf( tt->inc - (tt->max[YY] - tt->min[YY])/TERRAIN_N_Y ) > 1e-3 )
     {
-      // Need to implement more sophisticated tt->inc 
+      // Need to implement more sophisticated tt->inc
       fprintf( stderr, "X and Y distance/pixel not equal: %g %g\n",
 	       tt->inc, (tt->max[YY] - tt->min[YY])/TERRAIN_N_Y );
       exit( -1 );
@@ -2173,18 +2173,18 @@ void generate_true_cost_map_old( TERRAIN *tt, unsigned int seed )
   tt->goal[YY] = 24;
   tt->goal[ANGLE] = tt->current[ANGLE];
   // should ignore this in calculating distance to goal
-  tt->current[SIDE] = LEFT; 
+  tt->current[SIDE] = LEFT;
 
   // clear cost map
   for ( i = 0; i < tt->resolution[XX]; i++ )
     for ( j = 0; j < tt->resolution[YY]; j++ )
       set_true_cost_map_pixel( tt, i, j, 0.0 );
-    
+
 
   // change seed to get new terrain
-  srand( seed ); 
+  srand( seed );
 
-  
+
   // random rectangles: this is in pixel units
   for ( i = 0; i < 100; i++ )
   {
@@ -2217,7 +2217,7 @@ void generate_true_cost_map_old( TERRAIN *tt, unsigned int seed )
   {
   ixc = rand() % tt->resolution[XX];
   iyc = rand() % tt->resolution[YY];
-  ixl = rand() % 50; 
+  ixl = rand() % 50;
   iyl = 2;
   for ( ix = ixc;  ix <= ixc + ixl; ix++ )
   for ( iy = iyc; iy <= iyc + iyl; iy++ )
@@ -2243,11 +2243,11 @@ void generate_true_cost_map_old( TERRAIN *tt, unsigned int seed )
 	if ( (ix - ixc)*(ix - ixc) + (iy - iyc)*(iy - iyc) <= ixl*ixl )
 	  set_true_cost_map_pixel( tt, ix, iy, 0.0 );
       }
-   	
+
   // BLUR COST MAP
   // blur each column
   for ( ix = 0; ix < tt->resolution[XX]; ix++ )
-    { 
+    {
       for ( iy = 0; iy < tt->resolution[YY]; iy++ )
 		{
 			value[ix][iy] = 0;
@@ -2255,11 +2255,11 @@ void generate_true_cost_map_old( TERRAIN *tt, unsigned int seed )
                 for (kx = -2; kx <= 2; kx++)
                     value[ix][iy] += get_true_cost_map_pixel(tt,ix + kx, iy + ky);
 			value[ix][iy] = value[ix][iy]/25;
-			
+
 		}
     }
   for ( ix = 0; ix < tt->resolution[XX]; ix++ )
 	  for ( iy = 0; iy < tt->resolution[YY]; iy++ )
 		set_true_cost_map_pixel( tt, ix, iy, value[ix][iy]);
-	
+
 }

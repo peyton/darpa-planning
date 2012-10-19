@@ -214,8 +214,6 @@ main (int argc, char** argv)
   // Add footsteps to our FootstepVisualizer
   viewer->addFootsteps(steps);
 
-  viewer->removeFootsteps();
-  viewer->removeFootsteps();
   //--------------------
   // -----Main loop-----
   //--------------------
