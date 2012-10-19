@@ -205,7 +205,7 @@ main (int argc, char** argv)
     footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)(rand() % 2);
 
     // Rotation (in radians) about the normal vector
-    float rotation = 0.0f;
+    float rotation = (float)rand() / (float)RAND_MAX;
 
     footsteps::Footstep footstep (pt, rotation, chirality);
     steps.push_back (footstep);
@@ -214,6 +214,10 @@ main (int argc, char** argv)
   // Add footsteps to our FootstepVisualizer
   viewer->addFootsteps(steps);
 
+  viewer->addFootsteps(steps);
+
+  viewer->addFootsteps(steps);
+  viewer->removeFootsteps();
   //--------------------
   // -----Main loop-----
   //--------------------

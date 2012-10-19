@@ -10,7 +10,7 @@
  *       Revision:  none
  *       Compiler:  gcc
  *
- *         Author:  Peyton Randolph, 
+ *         Author:  Peyton Randolph,
  *   Organization:  Carnegie Mellon University
  *
  * =====================================================================================
@@ -83,7 +83,7 @@ Footstep::operator< (const Footstep& other) const
   return p.x < op.x;
 }
 
-/*  
+/*
  * Footstep Style
  */
 
@@ -203,18 +203,19 @@ FootstepVisualizer::drawBox (Footstep footstep, const std::string &id, int viewp
 
   Eigen::Quaternionf rotation_to_normal;
   rotation_to_normal.setFromTwoVectors(default_normal, normal);
-  Eigen::Quaternionf rotation_about_normal = Eigen::Quaternionf(pt.normal_x, pt.normal_y, pt.normal_z, footstep.getRotation());
+
+  Eigen::AngleAxisf axis_angle = Eigen::AngleAxisf(footstep.getRotation(), normal);
+  Eigen::Quaternionf rotation_about_normal = Eigen::Quaternionf(axis_angle);
 
   Eigen::Vector3f offset;
-  
+
   if(sqrt(normal.dot(normal)) != 0.0f)
     offset = normal * (1 / sqrt(normal.dot(normal)) * style.r / 2.0f);
   else
     offset = default_normal * style.r / 2.0f;
 
-  //addArrow<pcl::PointXYZ, pcl::PointXYZ>(pcl::PointXYZ(location.x(), location.y(), location.z()), pcl::PointXYZ(location.x() + normal_cross.x(), location.y() + normal_cross.y(), location.z() + normal_cross.z()), 0.0f, 1.0f, 0.0f, id + "hi", viewport);
 
-  addCube(location + offset, rotation_to_normal.normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
+  addCube(location + offset, (rotation_about_normal * rotation_to_normal).normalized(), style.width, style.r, style.height, color.r, color.g, color.b, id, viewport);
 
 }
 
@@ -251,7 +252,7 @@ FootstepVisualizer::addCube (const Eigen::Vector3f &translation, const Eigen::Qu
   return (true);
 }
 
-/*  
+/*
  * Static helper functions
  */
 
