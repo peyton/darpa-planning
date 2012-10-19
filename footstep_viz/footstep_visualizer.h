@@ -2,6 +2,9 @@
  * Footstep Visualizer
  */
 
+#ifndef FOOTSTEP_VISUALIZER_H
+#define FOOTSTEP_VISUALIZER_H
+
 #include <iostream>
 #include <map>
 #include <utility>
@@ -26,7 +29,7 @@ namespace footsteps
     enum Kind { sphere, box };
   }
 
-  /* 
+  /*
    * Footstep
    */
   class Footstep
@@ -49,7 +52,7 @@ namespace footsteps
       /*
        * Getters/setters
        */
-      inline pcl::PointNormal 
+      inline pcl::PointNormal
       const getPoint() const { return point_; }
 
       inline float
@@ -134,14 +137,14 @@ namespace footsteps
         footstep_draw_functions_[Shape::box] = &footsteps::FootstepVisualizer::drawBox;
         footstep_draw_functions_[Shape::sphere] = &footsteps::FootstepVisualizer::drawSphere;
 
-        // Initialize style 
+        // Initialize style
         footstep_style_ = DefaultFootstepStyle ();
       };
 
       FootstepVisualizer (int &argc, char **argv, const std::string &name = "",
-          pcl::visualization::PCLVisualizerInteractorStyle* style = pcl::visualization::PCLVisualizerInteractorStyle::New (), const bool create_interactor = true): pcl::visualization::PCLVisualizer::PCLVisualizer (argc, argv, name, style, create_interactor) { 
+          pcl::visualization::PCLVisualizerInteractorStyle* style = pcl::visualization::PCLVisualizerInteractorStyle::New (), const bool create_interactor = true): pcl::visualization::PCLVisualizer::PCLVisualizer (argc, argv, name, style, create_interactor) {
       };
-      
+
       virtual ~FootstepVisualizer ()
       {
 
@@ -159,3 +162,4 @@ namespace footsteps
   };
 
 }
+#endif

@@ -170,12 +170,12 @@ main (int argc, char** argv)
 
     // Use all neighbors in a sphere of radius 3cm
     ne.setRadiusSearch (0.03);
-    
+
     // Compute the features
     ne.compute (*cloud_normals_ptr);
   }
 
-  /* 
+  /*
    * Visualization
    */
 
@@ -185,7 +185,7 @@ main (int argc, char** argv)
 
   // Generate random footsteps
   footsteps::FootstepVector steps;
-  
+
   // Generate 10 random footsteps
   for (int i = 0; i < 10; i++)
   {
@@ -210,7 +210,7 @@ main (int argc, char** argv)
     footsteps::Footstep footstep (pt, rotation, chirality);
     steps.push_back (footstep);
   }
-  
+
   // Add footsteps to our FootstepVisualizer
   viewer->addFootsteps(steps);
 
