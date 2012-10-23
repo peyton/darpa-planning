@@ -182,6 +182,7 @@ cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
 {
 	boost::mutex::scoped_lock lock (mtx_);
 	pcl::transformPointCloud (*cloud, *cloud_src_, targetToSource2);
+  lock.unlock();
 }
 
 // Fit a plane to our data
@@ -211,21 +212,39 @@ unsigned int text_id = 0;
 void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
     void* viewer_void)
 {
-  if (!(event.getKeySym () == "m" && event.keyDown ()))
-    return;
+  if (event.getKeySym () == "m" && event.keyDown ())
+  {
+    std::cout << "m was pressed => fitting plane" << std::endl;
 
-  std::cout << "m was pressed => fitting plane" << std::endl;
+
+    // Fit a plane to the most recent data
+    boost::mutex::scoped_lock lock (mtx_);
+    pcl::ModelCoefficients::Ptr coefficients = plane_fit(cloud_src_);
+    // Do something with the coefficents.
+    std::cout << "Coefficients: " << coefficients << std::endl;
+
+    planar_normals[0] = coefficients->values[1];
+    planar_normals[1] = coefficients->values[2];
+    planar_normals[2] = coefficients->values[3];
+
+    lock.unlock();
+
+    text_id = 0;
+  }
+  if (event.getKeySym () == "y" && event.keyDown ())
+  {
+    boost::mutex::scoped_lock lock (refreshMtx_);
+    pcl::io::savePCDFile("out.pcd", *cloud_refresh_ptr_);
+    std::cout << "Wrote cloud to `out.pcd`!" << std::endl;
+
+    std::ofstream output_file("./footsteps.txt");
+    for (footsteps::FootstepVector::const_iterator i = footsteps_.begin(); i != footsteps_.end(); ++i)
+      output_file << i->getPoint().data[0] << " " << i->getPoint().data[1] << " " << i->getPoint().data[2] << std::endl;
 
 
-  // Fit a plane to the most recent data
-  boost::mutex::scoped_lock lock (mtx_);
-  pcl::ModelCoefficients::Ptr coefficients = plane_fit(cloud_src_);
-  // Do something with the coefficents.
-  std::cout << "Coefficients: " << coefficients << std::endl;
-
-  lock.unlock();
-
-  text_id = 0;
+    std::cout << "Wrote footsteps to `footsteps.txt`!" << std::endl;
+    lock.unlock();
+  }
 }
 
 
@@ -239,6 +258,7 @@ void visualizerFunc()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters();
 
+  viewer->setCameraPosition(4.f, 4.f, 4.f, 1.f, -1.f, 1.f);
   viewer->registerKeyboardCallback (keyboardEventOccurred, (void*)&viewer);
 
 	while(!viewer->wasStopped())
