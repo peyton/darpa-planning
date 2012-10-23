@@ -31,7 +31,6 @@ boost::mutex mtx_;
 volatile bool viewerNeedsRefresh_;
 // Point cloud to show after refresh
 pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_refresh_ptr_ (new pcl::PointCloud<pcl::PointXYZRGBA>);
-pcl::PointCloud<pcl::Normal>::Ptr normal_refresh_ptr_ (new pcl::PointCloud<pcl::Normal>);
 // Footsteps to show after refresh
 footsteps::FootstepVector footsteps_;
 // Mutex to protect access to refresh globals
@@ -324,30 +323,6 @@ void workerFunc()
     p1 = p1->previous;
   }
 
-  /*
- * Compute normals
- */
-  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_ptr (new pcl::PointCloud<pcl::Normal>);
-    // Create the normal estimation class, and pass the input dataset to it
-    pcl::NormalEstimation<pcl::PointXYZRGBA, pcl::Normal> ne;
-    ne.setInputCloud (downsampled);
-
-    // Create an empty kdtree representation, and pass it to the normal estimation object.
-    // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
-    pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGBA> ());
-    ne.setSearchMethod (tree);
-
-    // Use all neighbors in a sphere of radius 10cm
-    ne.setRadiusSearch (0.10);
-
-    // Restrict indices to those we want to step to
-
-    boost::shared_ptr<vector<int> > indices_ptr (new vector<int> (footstep_indices));
-    //ne.setIndices(indices_ptr);
-
-    // Compute the features
-    ne.compute (*cloud_normals_ptr);
-
 	// Generate footsteps
 	footsteps::FootstepVector steps;
 
@@ -355,8 +330,6 @@ void workerFunc()
   for (std::vector<int>::iterator it = footstep_indices.begin(); it != footstep_indices.end(); it++)
   {
 				pcl::PointXYZRGBA target_pt = downsampled->points[*it];
-
-				pcl::Normal target_normal = (*cloud_normals_ptr)[*it];
 
 				//float rotation = p1->state[ANGLE];
         float rotation = 0;
@@ -367,6 +340,7 @@ void workerFunc()
 				memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
 				//memcpy(pt_nrm.data_n, target_normal.data_n, 3 * sizeof(float));
 
+        // Dummy normal vector
         float normals[3] = {0.f, 1.f, 0.f};
 				memcpy(pt_nrm.data_n, normals, 3 * sizeof(float));
 				footsteps::Footstep footstep (pt_nrm, rotation, chirality);
