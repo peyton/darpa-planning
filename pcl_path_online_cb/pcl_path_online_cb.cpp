@@ -172,15 +172,11 @@ void Get_Transformation_Matrix()
 	  pcl::transformPointCloud (*cloud_sc2, *cloud_tr2, targetToSource2);
 }
 
-void cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud){
-
-	//const Eigen::Vector3f translate (0, 0.0, 0.0);
-	//const Eigen::Quaternionf no_rotation (0, 0, 0, 0);
-	//pcl::transformPointCloud (*cloud, *cloud_src, translate, no_rotation);
+void
+cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
+{
 	boost::mutex::scoped_lock lock (mtx_);
 	pcl::transformPointCloud (*cloud, *cloud_src, targetToSource2);
-	//boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> > pointer(cloud_src);
-    //viewer.showCloud(pointer);
 }
 
 void visualizerFunc()
@@ -239,58 +235,58 @@ void workerFunc()
     const float voxel_grid_leaf_size = 0.01;
     boost::this_thread::sleep(workTime);
 
-	//while(1){
-	boost::mutex::scoped_lock lock (mtx_);
-	downsample (cloud_tr2, voxel_grid_leaf_size, downsampled);
-	lock.unlock();
-	LL = downsampled->height*downsampled->width;
-	for (i=0;i<LL;i++)
-	{
-		if (downsampled->points[i].x!=NULL){
-			terrain_indices( t1, downsampled->points[i].x+10, downsampled->points[i].z+10, &ix, &iy, NULL );
-			terrain_value[TERRAIN_N_X-1-ix][iy] = terrain_value[TERRAIN_N_X-1-ix][iy] + downsampled->points[i].y;
-			terrain_count[TERRAIN_N_X-1-ix][iy] = terrain_count[TERRAIN_N_X-1-ix][iy] + 1;
-			terrain_index[TERRAIN_N_X-1-ix][iy] = i;
+	while(true){
+    boost::mutex::scoped_lock lock (mtx_);
+    downsample (cloud_src, voxel_grid_leaf_size, downsampled);
+    lock.unlock();
+    LL = downsampled->height*downsampled->width;
+    for (i=0;i<LL;i++)
+    {
+      if (downsampled->points[i].x != 0){
+        terrain_indices( t1, downsampled->points[i].x+10, downsampled->points[i].z+10, &ix, &iy, NULL );
+        terrain_value[TERRAIN_N_X-1-ix][iy] = terrain_value[TERRAIN_N_X-1-ix][iy] + downsampled->points[i].y;
+        terrain_count[TERRAIN_N_X-1-ix][iy] = terrain_count[TERRAIN_N_X-1-ix][iy] + 1;
+        terrain_index[TERRAIN_N_X-1-ix][iy] = i;
 
-		}
-	}
+      }
+    }
     for (i=0 ; i<TERRAIN_N_X ; i++){
-	   for (j=0 ; j<TERRAIN_N_Y ; j++){
-		   if (terrain_count[i][j]!=0)
-				terrain_value[i][j] = terrain_value[i][j]/terrain_count[i][j];
-		   temp[i][j] = terrain_value[i][j];
-	   }
-	}
+      for (j=0 ; j<TERRAIN_N_Y ; j++){
+        if (terrain_count[i][j]!=0)
+          terrain_value[i][j] = terrain_value[i][j]/terrain_count[i][j];
+        temp[i][j] = terrain_value[i][j];
+      }
+    }
 
     for (i=0 ; i<TERRAIN_N_X ; i++){
-	   for (j=0 ; j<TERRAIN_N_Y ; j++){
-			if (temp[i][j]==0){
-				count = 0;
-				sum = 0;
-				for (loc_i=i-4; loc_i<i+2; loc_i++){
-					for (loc_j=j-4; loc_j<j+2; loc_j++){
-						if (loc_i>=0&&loc_j>=0&&loc_i<TERRAIN_N_X&&loc_j<TERRAIN_N_X){
-							if (temp[loc_i][loc_j]!=0){
-								sum = sum + temp[loc_i][loc_j];
-								count = count + 1;
-							}
-						}
-					}
-				}
-				if (count>0)
-					terrain_value[i][j] = sum/count;
-			}
-	   }
-	}
+      for (j=0 ; j<TERRAIN_N_Y ; j++){
+        if (temp[i][j]==0){
+          count = 0;
+          sum = 0;
+          for (loc_i=i-4; loc_i<i+2; loc_i++){
+            for (loc_j=j-4; loc_j<j+2; loc_j++){
+              if (loc_i>=0&&loc_j>=0&&loc_i<TERRAIN_N_X&&loc_j<TERRAIN_N_X){
+                if (temp[loc_i][loc_j]!=0){
+                  sum = sum + temp[loc_i][loc_j];
+                  count = count + 1;
+                }
+              }
+            }
+          }
+          if (count>0)
+            terrain_value[i][j] = sum/count;
+        }
+      }
+    }
 
 
     for (i=0 ; i<TERRAIN_N_X ; i++)
-	   for (j=0 ; j<TERRAIN_N_Y ; j++)
-			cost_map[i][j] = terrain_cost( i,j, terrain_value);
-/*
-   // Save to teh file
-   pFile = fopen ("cost_map.txt","w");
-   for (i=0 ; i<TERRAIN_N_X ; i++){
+      for (j=0 ; j<TERRAIN_N_Y ; j++)
+        cost_map[i][j] = terrain_cost( i,j, terrain_value);
+    /*
+    // Save to teh file
+    pFile = fopen ("cost_map.txt","w");
+    for (i=0 ; i<TERRAIN_N_X ; i++){
 	   for (j=0 ; j<TERRAIN_N_Y ; j++){
 		   if (j==TERRAIN_N_Y-1)
 			fprintf (pFile, "%.4f\n",cost_map[i][j]);
@@ -309,30 +305,26 @@ void workerFunc()
 
 	// Find the path based on Astar
 	generate_true_cost_map( t1, cost_map);
-	a1 = create_astar( t1 );
+  a1 = create_astar( t1 );
 
-	plan();
-	printf_final_path( p1 );
+  plan();
+  printf_final_path( p1 );
 
 
-    // get indices of target pcl points
-    std::vector<int> footstep_indices;
-	for ( ; ; )
+  // get indices of target pcl points
+  std::vector<int> footstep_indices;
+  while (p1 != NULL)
+  {
+    terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
+    if (terrain_index[ix][iy] != 0)
     {
-      if ( p1 == NULL )
-		break;
-			terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
-			if (terrain_index[ix][iy]!=NULL){
-				// footstep parameters
-				footstep_indices.push_back(terrain_index[ix][iy]);
-	  }
-      p1 = p1->previous;
+      // footstep parameters
+      footstep_indices.push_back(terrain_index[ix][iy]);
     }
-	p1 = NULL;
+    p1 = p1->previous;
+  }
 
-
-
-/*
+  /*
  * Compute normals
  */
   pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_ptr (new pcl::PointCloud<pcl::Normal>);
@@ -368,7 +360,7 @@ void workerFunc()
 
 				//float rotation = p1->state[ANGLE];
         float rotation = 0;
-				footsteps::Chirality::Kind chirality = footsteps::Chirality::left;//(footsteps::Chirality::Kind)p1->state[SIDE];
+				footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
 
 				// create new point to be footstep target
 				pcl::PointNormal pt_nrm;
@@ -395,7 +387,7 @@ void workerFunc()
      //std::stringstream s;
      //s << "test.pcd";
 	 //pcl::io::savePCDFileASCII(s.str(), *downsampled);
-	//}
+	}
 }
 
 int
@@ -409,7 +401,7 @@ main (int argc, char** argv)
 		for (j=0;j<TERRAIN_N_Y;j++){
 			terrain_value[i][j] = 0;
 			terrain_count[i][j] = 0;
-			terrain_index[i][j] = NULL;
+			terrain_index[i][j] = 0;
 		}
 	}
     t1->min[XX] = 0.0;
