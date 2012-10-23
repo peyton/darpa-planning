@@ -6,9 +6,12 @@
 #include <pcl/point_types.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/io/openni_grabber.h>
+#include <pcl/ModelCoefficients.h>
 #include <pcl/registration/transforms.h>
 #include <pcl/registration/transforms.h>
 #include <pcl/registration/transformation_estimation_svd.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
 
 #include "footstep_visualizer.h"
 
@@ -17,8 +20,8 @@ extern "C" {
 }
 
 
-pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_src (new pcl::PointCloud<pcl::PointXYZRGBA>);
-pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_tr2 (new pcl::PointCloud<pcl::PointXYZRGBA>);
+pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_src_ (new pcl::PointCloud<pcl::PointXYZRGBA>);
+pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_tr2_ (new pcl::PointCloud<pcl::PointXYZRGBA>);
 Eigen::Matrix4f Ti2 = Eigen::Matrix4f::Identity (), targetToSource2;
 boost::mutex mtx_;
 
@@ -35,6 +38,9 @@ pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_refresh_ptr_ (new pcl::PointCloud<
 footsteps::FootstepVector footsteps_;
 // Mutex to protect access to refresh globals
 boost::mutex refreshMtx_;
+
+// Planar normals
+float planar_normals[4] = {0.0f, 1.0f, 0.0f, 0.0f};
 
 /*
  * Astar globals
@@ -168,15 +174,60 @@ void Get_Transformation_Matrix()
 	  pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ> svd;
 	  svd.estimateRigidTransformation(*cloud_temp2, *cloud_temp1, correspondences, Ti2);
 	  targetToSource2 = Ti2.inverse();
-	  pcl::transformPointCloud (*cloud_sc2, *cloud_tr2, targetToSource2);
+	  pcl::transformPointCloud (*cloud_sc2, *cloud_tr2_, targetToSource2);
 }
 
 void
 cloud_cb_(const pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr &cloud)
 {
 	boost::mutex::scoped_lock lock (mtx_);
-	pcl::transformPointCloud (*cloud, *cloud_src, targetToSource2);
+	pcl::transformPointCloud (*cloud, *cloud_src_, targetToSource2);
 }
+
+// Fit a plane to our data
+// Used to determine the normals for each footstep point
+pcl::ModelCoefficients::Ptr
+plane_fit(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud)
+{
+  pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+
+  // Create the segmentation object
+  pcl::SACSegmentation<pcl::PointXYZRGBA> seg;
+  // Optional
+  seg.setOptimizeCoefficients (true);
+  // Mandatory
+  seg.setModelType (pcl::SACMODEL_PLANE);
+  seg.setMethodType (pcl::SAC_RANSAC);
+  seg.setDistanceThreshold (0.1);
+
+  seg.setInputCloud (cloud);
+  seg.segment (*inliers, *coefficients);
+
+  return coefficients;
+}
+
+unsigned int text_id = 0;
+void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
+    void* viewer_void)
+{
+  if (!(event.getKeySym () == "m" && event.keyDown ()))
+    return;
+
+  std::cout << "m was pressed => fitting plane" << std::endl;
+
+
+  // Fit a plane to the most recent data
+  boost::mutex::scoped_lock lock (mtx_);
+  pcl::ModelCoefficients::Ptr coefficients = plane_fit(cloud_src_);
+  // Do something with the coefficents.
+  std::cout << "Coefficients: " << coefficients << std::endl;
+
+  lock.unlock();
+
+  text_id = 0;
+}
+
 
 void visualizerFunc()
 {
@@ -187,6 +238,8 @@ void visualizerFunc()
 
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters();
+
+  viewer->registerKeyboardCallback (keyboardEventOccurred, (void*)&viewer);
 
 	while(!viewer->wasStopped())
 	{
@@ -236,7 +289,7 @@ void workerFunc()
 
 	while(true){
     boost::mutex::scoped_lock lock (mtx_);
-    downsample (cloud_src, voxel_grid_leaf_size, downsampled);
+    downsample (cloud_tr2_, voxel_grid_leaf_size, downsampled);
     lock.unlock();
     LL = downsampled->height*downsampled->width;
     for (i=0;i<LL;i++)
@@ -309,59 +362,43 @@ void workerFunc()
   plan();
   printf_final_path( p1 );
 
+	// Generate footsteps
+	footsteps::FootstepVector steps;
 
   // get indices of target pcl points
-  std::vector<int> footstep_indices;
   while (p1 != NULL)
   {
     terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
     if (terrain_index[ix][iy] != 0)
     {
+      int index = terrain_index[ix][iy];
       // footstep parameters
-      footstep_indices.push_back(terrain_index[ix][iy]);
+      pcl::PointXYZRGBA target_pt = downsampled->points[index];
+
+      float rotation = p1->state[ANGLE];
+      footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
+
+      // create new point to be footstep target
+      pcl::PointNormal pt_nrm;
+      memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
+
+      // Dummy normal vector
+      memcpy(pt_nrm.data_n, planar_normals, 3 * sizeof(float));
+      footsteps::Footstep footstep (pt_nrm, rotation, chirality);
+      steps.push_back(footstep);
     }
     p1 = p1->previous;
   }
 
-	// Generate footsteps
-	footsteps::FootstepVector steps;
-
-  std::cout << footstep_indices.size() << std::endl;
-  for (std::vector<int>::iterator it = footstep_indices.begin(); it != footstep_indices.end(); it++)
-  {
-				pcl::PointXYZRGBA target_pt = downsampled->points[*it];
-
-				//float rotation = p1->state[ANGLE];
-        float rotation = 0;
-				footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
-
-				// create new point to be footstep target
-				pcl::PointNormal pt_nrm;
-				memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
-				//memcpy(pt_nrm.data_n, target_normal.data_n, 3 * sizeof(float));
-
-        // Dummy normal vector
-        float normals[3] = {0.f, 1.f, 0.f};
-				memcpy(pt_nrm.data_n, normals, 3 * sizeof(float));
-				footsteps::Footstep footstep (pt_nrm, rotation, chirality);
-				steps.push_back(footstep);
-    }
-	boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGBA> > pointer(downsampled);
-
-
   // Update refresh global variables
   {
     boost::mutex::scoped_lock lock(refreshMtx_);
-    pcl::copyPointCloud(*pointer, *cloud_refresh_ptr_);
+    pcl::copyPointCloud(*downsampled, *cloud_refresh_ptr_);
     footsteps_ = steps;
     viewerNeedsRefresh_ = true;
     lock.unlock();
   }
-
-     //std::stringstream s;
-     //s << "test.pcd";
-	 //pcl::io::savePCDFileASCII(s.str(), *downsampled);
-	}
+  }
 }
 
 int
