@@ -12,6 +12,7 @@
 #include <pcl/registration/transformation_estimation_svd.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <boost/lexical_cast.hpp>
 
 #include "footstep_visualizer.h"
 
@@ -38,9 +39,11 @@ pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_refresh_ptr_ (new pcl::PointCloud<
 footsteps::FootstepVector footsteps_;
 // Mutex to protect access to refresh globals
 boost::mutex refreshMtx_;
+// Output counter
+int numOutputs_ = 0;
 
 // Planar normals
-float planar_normals[4] = {0.0f, 1.0f, 0.0f, 0.0f};
+float planar_normals[4] = {0.0f, -1.0f, 0.0f, 0.0f};
 
 /*
  * Astar globals
@@ -234,15 +237,17 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
   if (event.getKeySym () == "y" && event.keyDown ())
   {
     boost::mutex::scoped_lock lock (refreshMtx_);
-    pcl::io::savePCDFile("out.pcd", *cloud_refresh_ptr_);
-    std::cout << "Wrote cloud to `out.pcd`!" << std::endl;
+    pcl::io::savePCDFile(std::string("out") + boost::lexical_cast<std::string>(numOutputs_) + std::string(".pcd"), *cloud_refresh_ptr_);
+    std::cout << "Wrote cloud to `out" << numOutputs_ << ".pcd`!" << std::endl;
 
-    std::ofstream output_file("./footsteps.txt");
+    std::string footsteps_filename = std::string("./footsteps") + boost::lexical_cast<std::string>(numOutputs_) + std::string(".txt");
+    std::ofstream output_file((char *)footsteps_filename.c_str());
     for (footsteps::FootstepVector::const_iterator i = footsteps_.begin(); i != footsteps_.end(); ++i)
       output_file << i->getPoint().data[0] << " " << i->getPoint().data[1] << " " << i->getPoint().data[2] << std::endl;
 
 
-    std::cout << "Wrote footsteps to `footsteps.txt`!" << std::endl;
+    std::cout << "Wrote footsteps to `footsteps" << numOutputs_ << ".txt`!" << std::endl;
+    numOutputs_++;
     lock.unlock();
   }
 }
@@ -389,24 +394,20 @@ void workerFunc()
   while (p1 != NULL)
   {
     terrain_indices( t1, p1->state[XX], p1->state[YY], &ix, &iy, NULL);
-    if (terrain_index[ix][iy] != 0)
-    {
-      int index = terrain_index[ix][iy];
-      // footstep parameters
-      pcl::PointXYZRGBA target_pt = downsampled->points[index];
+    // footstep parameters
+    pcl::PointXYZ target_pt = pcl::PointXYZ(p1->state[XX] - 10.f, 0.0f, p1->state[YY] - 10.f);
 
-      float rotation = p1->state[ANGLE];
-      footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
+    float rotation = p1->state[ANGLE] - 3.14f/2.0f;
+    footsteps::Chirality::Kind chirality = (footsteps::Chirality::Kind)p1->state[SIDE];
 
-      // create new point to be footstep target
-      pcl::PointNormal pt_nrm;
-      memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
+    // create new point to be footstep target
+    pcl::PointNormal pt_nrm;
+    memcpy(pt_nrm.data, target_pt.data, 3 * sizeof(float)); // copy xyz
 
-      // Dummy normal vector
-      memcpy(pt_nrm.data_n, planar_normals, 3 * sizeof(float));
-      footsteps::Footstep footstep (pt_nrm, rotation, chirality);
+    // Dummy normal vector
+    memcpy(pt_nrm.data_n, planar_normals, 3 * sizeof(float));
+    footsteps::Footstep footstep (pt_nrm, rotation, chirality);
       steps.push_back(footstep);
-    }
     p1 = p1->previous;
   }
 
