@@ -215,6 +215,9 @@ unsigned int text_id = 0;
 void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
     void* viewer_void)
 {
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *> (viewer_void);
+  // fit a plane to the current data, then use the normal vector of that plane as the normal vector
+  // for future footsteps
   if (event.getKeySym () == "m" && event.keyDown ())
   {
     std::cout << "m was pressed => fitting plane" << std::endl;
@@ -234,6 +237,7 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
 
     text_id = 0;
   }
+  // write data to file
   if (event.getKeySym () == "y" && event.keyDown ())
   {
     boost::mutex::scoped_lock lock (refreshMtx_);
@@ -250,6 +254,16 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
     numOutputs_++;
     lock.unlock();
   }
+  // Output camera parameters
+  if (event.getKeySym () == "C" && event.keyDown ())
+  {
+    std::vector<pcl::visualization::Camera> cameras;
+
+    viewer->getCameras(cameras);
+    pcl::visualization::Camera camera = cameras[0];
+    std::cout << "Pos: " << camera.pos[0] << "," << camera.pos[1] << "," << camera.pos[2] << std::endl;
+    std::cout << "View: " << camera.view[0] << "," << camera.view[1] << "," << camera.view[2] << std::endl;
+  }
 }
 
 
@@ -263,7 +277,7 @@ void visualizerFunc()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters();
 
-  viewer->setCameraPosition(4.f, 4.f, 4.f, 1.f, -1.f, 1.f);
+  viewer->setCameraPosition(0.456335f, -4.92199f, -3.07703f, -0.193089f, -0.680615f, 0.706739f);
   viewer->registerKeyboardCallback (keyboardEventOccurred, (void*)&viewer);
 
 	while(!viewer->wasStopped())
@@ -314,7 +328,7 @@ void workerFunc()
 
 	while(true){
     boost::mutex::scoped_lock lock (mtx_);
-    downsample (cloud_tr2_, voxel_grid_leaf_size, downsampled);
+    downsample (cloud_src_, voxel_grid_leaf_size, downsampled);
     lock.unlock();
     LL = downsampled->height*downsampled->width;
     for (i=0;i<LL;i++)
@@ -381,11 +395,11 @@ void workerFunc()
 	*/
 
 	// Find the path based on Astar
-	generate_true_cost_map( t1, cost_map);
-  a1 = create_astar( t1 );
+	//generate_true_cost_map( t1, cost_map);
+  //a1 = create_astar( t1 );
 
-  plan();
-  printf_final_path( p1 );
+  //plan();
+  //printf_final_path( p1 );
 
 	// Generate footsteps
 	footsteps::FootstepVector steps;
